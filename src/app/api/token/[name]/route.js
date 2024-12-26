@@ -4,7 +4,7 @@ import { jwt } from 'twilio';
 
 const ACCOUNT_SID = 'AC53f4fc7f3c38625b5df08e7264f8190a';
 const API_KEY_SID = 'SKd8847f4d5bd7949acbe3e0ea965bdce3';
-const API_KEY_SECRET = 'S1W7Yyvz6f0M7CrFRBGgOpw7TYXr3i1K';
+const API_KEY_SEC = 'S1W7Yyvz6f0M7CrFRBGgOpw7TYXr3i1K';
 
 // GET handler
 export async function GET(request, { params }) {
@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
   
   try {
     const identity = userId;
-    const token = new jwt.AccessToken(ACCOUNT_SID, API_KEY_SID, API_KEY_SECRET, {identity});
+    const token = new jwt.AccessToken(ACCOUNT_SID, API_KEY_SID, API_KEY_SEC, {identity});
 
     const videoGrant = new jwt.AccessToken.VideoGrant({ room: roomName });
     token.addGrant(videoGrant);
