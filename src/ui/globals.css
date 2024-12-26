@@ -30,3 +30,15 @@ input[type='number']::-webkit-outer-spin-button {
 .animate-blink {
   animation: blink 1.5s infinite;
 }
+
+.local-video {
+  width: 320px;
+  height: 240px;
+  background-color: black;
+}
+
+.remote-video {
+  width: 640px;
+  height: 480px;
+  background-color: black;
+}
