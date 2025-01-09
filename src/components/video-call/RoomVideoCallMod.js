@@ -1,100 +1,103 @@
-import { useVideoContext } from '@/hooks/VideoContext';
 import { useState } from 'react';
+import { useVideoContext } from '@/hooks/VideoContext';
 import useRecorder from '../../hooks/useRecorderMod';
 import ParticipantList from './ParticipantList';
+import {VideoStreamMerger} from 'video-stream-merger';
 
 export default function RoomVideoCallMod({ addAudioTrack }) {
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const [canvasStream, setCanvasStream] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
 
-  // Gunakan dua instance useRecorder
-  const { startRecording: startLocalRecording, stopRecording: stopLocalRecording } = useRecorder();
-  const { startRecording: startRemoteRecording, stopRecording: stopRemoteRecording } = useRecorder();
-  
+  const { startRecording: startMergedRecording, stopRecording: stopMergedRecording } = useRecorder();
   const { room } = useVideoContext();
 
-  const mergeStreams = (videoStreams, audioStreams) => {
-    const mediaStream = new MediaStream();
-    videoStreams.forEach((videoTrack) => mediaStream.addTrack(videoTrack));
-    audioStreams.forEach((audioTrack) => mediaStream.addTrack(audioTrack));
-    return mediaStream;
-  };
-
   const handleStartRecording = async () => {
-    const localVideoStreams = [];
-    const localAudioStreams = [];
-    const remoteVideoStreams = [];
-    const remoteAudioStreams = [];
+    // Buat merger
+    const merger = new VideoStreamMerger({
+      width: 1280,
+      height: 720,
+      fps: 30,
+    });
 
     // Ambil track dari local participant
-    room.localParticipant.audioTracks.forEach((publication) => {
-      if (publication.track) {
-        localAudioStreams.push(publication.track.mediaStreamTrack);
-      }
-    });
+    const localVideoTracks = [];
+    const localAudioTracks = [];
     room.localParticipant.videoTracks.forEach((publication) => {
       if (publication.track) {
-        localVideoStreams.push(publication.track.mediaStreamTrack);
+        localVideoTracks.push(publication.track.mediaStreamTrack);
+      }
+    });
+    room.localParticipant.audioTracks.forEach((publication) => {
+      if (publication.track) {
+        localAudioTracks.push(publication.track.mediaStreamTrack);
       }
     });
 
     // Ambil track dari remote participants
+    const remoteVideoTracks = [];
+    const remoteAudioTracks = [];
     room.participants.forEach((participant) => {
-      participant.audioTracks.forEach((publication) => {
-        if (publication.track) {
-          remoteAudioStreams.push(publication.track.mediaStreamTrack);
-        }
-      });
       participant.videoTracks.forEach((publication) => {
         if (publication.track) {
-          remoteVideoStreams.push(publication.track.mediaStreamTrack);
+          remoteVideoTracks.push(publication.track.mediaStreamTrack);
+        }
+      });
+      participant.audioTracks.forEach((publication) => {
+        if (publication.track) {
+          remoteAudioTracks.push(publication.track.mediaStreamTrack);
         }
       });
     });
 
-    // Gabungkan local dan remote streams
-    const localStream = mergeStreams(localVideoStreams, localAudioStreams);
-    const remoteStream = mergeStreams(remoteVideoStreams, remoteAudioStreams);
+    // Tambah local dan remote video ke merger
+    localVideoTracks.forEach((track, index) => {
+      merger.addStream(new MediaStream([track]), {
+        x: index * 640, // Atur posisi video di canvas
+        y: 0,
+        width: 640,
+        height: 360,
+        mute: true,
+      });
+    });
 
-    // Mulai merekam masing-masing stream
-    await startLocalRecording(localStream);
-    await startRemoteRecording(remoteStream);
+    remoteVideoTracks.forEach((track, index) => {
+      merger.addStream(new MediaStream([track]), {
+        x: (index + 1) * 640,
+        y: 0,
+        width: 640,
+        height: 360,
+        mute: true,
+      });
+    });
+
+    // Tambah audio ke merger
+    [...localAudioTracks, ...remoteAudioTracks].forEach((track) => {
+      merger.addStream(new MediaStream([track]), { mute: false });
+    });
+
+    // Start merger
+    merger.start();
+    const mergedStream = merger.result;
+    await startMergedRecording(mergedStream);
 
     setIsRecording(true);
-    console.log('Recording started for local and remote streams.');
+    console.log('Recording started for merged streams.');
   };
 
   const handleStopRecording = async () => {
-    // Stop recording untuk local dan remote streams
-    const localBlob = await stopLocalRecording();
-    const remoteBlob = await stopRemoteRecording();
-
+    // Stop recording dan simpan file
+    const mergedBlob = await stopMergedRecording();
     setIsRecording(false);
 
-    // Simpan file untuk local recording
-    const localUrl = URL.createObjectURL(localBlob);
-    const localLink = document.createElement('a');
-    localLink.style.display = 'none';
-    localLink.href = localUrl;
-    localLink.download = `local-recording-${Date.now()}.webm`;
-    document.body.appendChild(localLink);
-    localLink.click();
-    window.URL.revokeObjectURL(localUrl);
+    const mergedUrl = URL.createObjectURL(mergedBlob);
+    const mergedLink = document.createElement('a');
+    mergedLink.style.display = 'none';
+    mergedLink.href = mergedUrl;
+    mergedLink.download = `merged-recording-${Date.now()}.webm`;
+    document.body.appendChild(mergedLink);
+    mergedLink.click();
+    URL.revokeObjectURL(mergedUrl);
 
-    // Simpan file untuk remote recording
-    const remoteUrl = URL.createObjectURL(remoteBlob);
-    const remoteLink = document.createElement('a');
-    remoteLink.style.display = 'none';
-    remoteLink.href = remoteUrl;
-    remoteLink.download = `remote-recording-${Date.now()}.webm`;
-    document.body.appendChild(remoteLink);
-    remoteLink.click();
-    window.URL.revokeObjectURL(remoteUrl);
-
-    console.log('Recording saved for both local and remote streams.');
+    console.log('Merged recording saved.');
   };
 
   return (

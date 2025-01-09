@@ -1,0 +1,70 @@
+.roomVideoCallCard {
+    width: 100%;
+    margin: 5px;
+}
+
+.roomVideoCallCardTitle {
+    display: flex;
+    flex-direction: column;
+    background: #2b2b2b;
+    padding: 20px;
+}
+
+.videoScreen {
+    height: 76vh;
+    display: block;
+    position: relative;
+}
+
+.internalUserVideoScreen {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    flex-direction: row;
+    margin-right: 10px;
+}
+
+.internalUserOne {
+    position: relative;
+    margin-right: 15px;
+}
+
+.lastInternalUser {
+    position: relative;
+}
+
+.participantTileVideo {
+    width: auto;
+    height: 150px;
+    border-radius: 5px;
+}
+
+.participantTileTitle {
+    position: absolute;
+    bottom: 0;
+    left: 20;
+}
+
+.remoteControlParticipant {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    height: 25px;
+    margin-bottom: 6px;
+    margin-left: 1px;
+    padding-right: 5px;
+}
+
+.remoteControlMainParticipant {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    height: 50px;
+    margin-bottom: 10px;
+    margin-left: 10px;
+}
