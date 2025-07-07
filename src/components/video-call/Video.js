@@ -1,168 +1,55 @@
-import { useEffect, useRef } from 'react';
-import { connect } from 'twilio-video';
+import { useRef } from 'react';
+import { useTwilioRoom } from '../hooks/useTwilioRoom';
 
 const Video = ({ roomId, userId }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
-  useEffect(() => {
-    let room;
+  useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
 
-    const joinRoom = async () => {
+  const handlePiP = async () => {
+    if (!document.pictureInPictureEnabled) {
+      alert("Picture-in-Picture is not supported on this browser.");
+      return;
+    }
+
+    const videoEl = remoteVideoRef.current?.querySelector('video');
+    if (videoEl) {
       try {
-        const response = await fetch(`/api/token/${roomId}?userId=${userId}`);
-        const { token } = await response.json();
-
-        // Hubungkan ke ruang video
-        room = await connect(token, { name: roomId });
-        console.log({room});
-
-        if (room) {
-                  // Tambahkan track video lokal
-        room.localParticipant.videoTracks.forEach(publication => {
-          const track = publication.track;
-          if (track && localVideoRef.current) {
-            while (localVideoRef.current.firstChild) {
-              localVideoRef.current.removeChild(localVideoRef.current.firstChild);
-            }
-            const videoElement = track.attach();
-            videoElement.id = `local-${track.sid}`;
-            localVideoRef.current.appendChild(videoElement);
-            console.log('Local track attached:', track);
-          }
-        });
-
-        if (room.participants.size > 0) {
-          room.participants.forEach(participant => {
-            console.log(`Participant connected: ${participant.identity}`);
-
-            // Lakukan iterasi pada semua video tracks yang dimiliki participant
-            participant.videoTracks.forEach(publication => {
-              if (publication.isSubscribed) {
-                const track = publication.track;
-
-                if (track && remoteVideoRef.current) {
-                  // Hapus elemen video sebelumnya dari DOM
-                  while (remoteVideoRef.current.firstChild) {
-                    remoteVideoRef.current.removeChild(remoteVideoRef.current.firstChild);
-                  }
-
-                  // Attach video track
-                  const videoElement = track.attach();
-                  videoElement.id = `remote-${track.sid || track.id || track.name}`;
-                  remoteVideoRef.current.appendChild(videoElement);
-                  console.log('Remote video track attached:', track);
-                }
-              }
-            });
-
-            // Listen for future video track subscriptions
-            participant.on('trackSubscribed', track => {
-              if (track.kind === 'video' && remoteVideoRef.current) {
-                console.log('New remote video track subscribed:', track);
-
-                const videoElement = track.attach();
-                videoElement.id = `remote-${track.sid || track.id || track.name}`;
-                remoteVideoRef.current.appendChild(videoElement);
-              }
-            });
-
-            // Handle track unsubscription
-            participant.on('trackUnsubscribed', track => {
-              console.log('Remote video track unsubscribed:', track);
-              const element = document.getElementById(`remote-${track.sid || track.id || track.name}`);
-              if (element) {
-                element.remove();
-              }
-            });
-          });
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else {
+          await videoEl.requestPictureInPicture();
         }
-
-        // Event: Peserta baru bergabung
-        room.on('participantConnected', participant => {
-          console.log(`Participant connected: ${participant.identity}`);
-          console.log(`Participant: ${participant}`);
-
-          // Tangani track yang sudah tersedia saat peserta bergabung
-          participant.tracks.forEach(publication => {
-            if (publication.isSubscribed) {
-              const track = publication.track;
-              if (track.kind === 'video' && remoteVideoRef.current) {
-                const videoElement = track.attach();
-                videoElement.id = `remote-${track.sid}`;
-                remoteVideoRef.current.appendChild(videoElement);
-              }
-            }
-
-            // Event: Tangani track yang diterbitkan setelah peserta bergabung
-            publication.on('subscribed', track => {
-              console.log('Track subscribed:', track.kind, track.sid);
-              if (track.kind === 'video' && remoteVideoRef.current) {
-                const videoElement = track.attach();
-                videoElement.id = `remote-${track.sid}`;
-                remoteVideoRef.current.appendChild(videoElement);
-              }
-            });
-          });
-
-          // Event: Track baru dipublikasikan oleh peserta
-          participant.on('trackPublished', publication => {
-            console.log('Track published:', publication.kind);
-            publication.on('subscribed', track => {
-              console.log('Track subscribed:', track.kind, track.sid);
-              if (track.kind === 'video' && remoteVideoRef.current) {
-                const videoElement = track.attach();
-                videoElement.id = `remote-${track.sid}`;
-                remoteVideoRef.current.appendChild(videoElement);
-              }
-            });
-          });
-        });
-
-        // Event: Peserta meninggalkan ruangan
-        room.on('participantDisconnected', participant => {
-          console.log(`Participant disconnected: ${participant.identity}`);
-          participant.tracks.forEach(publication => {
-            if (publication.track) {
-              const elements = publication.track.detach();
-              elements.forEach(element => element.remove());
-            }
-          });
-        });
-        }    
-
-        // Cleanup saat komponen di-unmount
-        return () => {
-          if (room) {
-            room.disconnect();
-            room.localParticipant.tracks.forEach(publication => {
-              if (publication.track) {
-                publication.track.stop();
-                const attachedElements = publication.track.detach();
-                attachedElements.forEach(element => element.remove());
-              }
-            });
-          }
-        };
-      } catch (error) {
-        console.error('Failed to connect to the room:', error);
+      } catch (err) {
+        console.error("Failed to toggle PiP", err);
       }
-    };
-
-    joinRoom();
-
-    return () => {
-      if (room) {
-        room.disconnect();
-      }
-    };
-  }, [roomId, userId]);
+    } else {
+      console.log("No remote video element available for PiP");
+    }
+  };
 
   return (
-    <div className="flex flex-row space-x-4">
-      <div ref={localVideoRef} className="local-video" />
-      <div ref={remoteVideoRef} className="remote-video" />
-    </div>
+<div className="flex flex-col items-center space-y-4 p-2 w-full h-full">
+  <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0 w-full max-w-screen-md">
+    <div
+      ref={localVideoRef}
+      className="bg-black sm:w-1/3 aspect-video rounded overflow-hidden"
+    />
+    <div
+      ref={remoteVideoRef}
+      className="bg-black w-full sm:w-2/3 aspect-video rounded overflow-hidden"
+    />
+  </div>
+
+  <button
+    onClick={handlePiP}
+    className="px-4 py-2 bg-blue-500 text-white rounded shadow hover:bg-blue-600 transition disabled:opacity-50"
+  >
+    Toggle PiP Mode
+  </button>
+</div>
+
   );
 };
 
