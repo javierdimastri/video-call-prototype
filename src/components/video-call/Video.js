@@ -1,91 +1,12 @@
-import { useEffect, useRef } from 'react';
-import { connect } from 'twilio-video';
+import { useRef } from 'react';
+import { useTwilioRoom } from '../hooks/useTwilioRoom';
 
 const Video = ({ roomId, userId }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
-  useEffect(() => {
-    let room;
+  useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
 
-    const joinRoom = async () => {
-      try {
-        const response = await fetch(`/api/token/${roomId}?userId=${userId}`);
-        const { token } = await response.json();
-
-        room = await connect(token, { name: roomId });
-        console.log({ room });
-
-        if (!room) return;
-
-        // Attach local track
-        room.localParticipant.videoTracks.forEach(publication => {
-          const track = publication.track;
-          if (track && localVideoRef.current) {
-            localVideoRef.current.innerHTML = '';
-            const el = track.attach();
-            el.id = `local-${track.sid}`;
-            localVideoRef.current.appendChild(el);
-            console.log('Remote video element attached:', el);
-          }
-        });
-
-        const attachRemoteTrack = (track) => {
-          if (track.kind === 'video' && remoteVideoRef.current) {
-            const el = track.attach();
-            el.id = `remote-${track.sid}`;
-            remoteVideoRef.current.innerHTML = ''; // Hanya tampilkan 1 remote
-            remoteVideoRef.current.appendChild(el);
-            console.log('Remote video element attached:', el); // debug
-          }
-        };
-
-        const detachRemoteTrack = (track) => {
-          const element = document.getElementById(`remote-${track.sid}`);
-          if (element) element.remove();
-          track.detach().forEach(el => el.remove());
-        };
-
-        room.participants.forEach(participant => {
-          participant.tracks.forEach(pub => {
-            if (pub.isSubscribed) attachRemoteTrack(pub.track);
-          });
-          participant.on('trackSubscribed', attachRemoteTrack);
-          participant.on('trackUnsubscribed', detachRemoteTrack);
-        });
-
-        room.on('participantConnected', participant => {
-          participant.on('trackSubscribed', attachRemoteTrack);
-          participant.on('trackUnsubscribed', detachRemoteTrack);
-        });
-
-        room.on('participantDisconnected', participant => {
-          participant.tracks.forEach(pub => {
-            if (pub.track) detachRemoteTrack(pub.track);
-          });
-        });
-
-      } catch (err) {
-        console.error('Failed to connect to room', err);
-      }
-    };
-
-    joinRoom();
-
-    return () => {
-      if (room) {
-        room.localParticipant.tracks.forEach(pub => {
-          if (pub.track) {
-            pub.track.stop();
-            pub.track.detach().forEach(el => el.remove());
-          }
-        });
-        room.disconnect();
-      }
-    };
-  }, [roomId, userId]);
-
-  // PiP trigger handler
   const handlePiP = async () => {
     if (!document.pictureInPictureEnabled) {
       alert("Picture-in-Picture is not supported on this browser.");
@@ -109,18 +30,26 @@ const Video = ({ roomId, userId }) => {
   };
 
   return (
-    <div className="flex flex-col space-y-4">
-      <div className="flex flex-row space-x-4">
-        <div ref={localVideoRef} className="local-video" />
-        <div ref={remoteVideoRef} className="remote-video" />
-      </div>
-      <button
-        onClick={handlePiP}
-        className="px-4 py-2 bg-blue-500 text-white rounded"
-      >
-        Toggle PiP Mode
-      </button>
-    </div>
+<div className="flex flex-col items-center space-y-4 p-2 w-full h-full">
+  <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0 w-full max-w-screen-md">
+    <div
+      ref={localVideoRef}
+      className="bg-black sm:w-1/3 aspect-video rounded overflow-hidden"
+    />
+    <div
+      ref={remoteVideoRef}
+      className="bg-black w-full sm:w-2/3 aspect-video rounded overflow-hidden"
+    />
+  </div>
+
+  <button
+    onClick={handlePiP}
+    className="px-4 py-2 bg-blue-500 text-white rounded shadow hover:bg-blue-600 transition disabled:opacity-50"
+  >
+    Toggle PiP Mode
+  </button>
+</div>
+
   );
 };
 
