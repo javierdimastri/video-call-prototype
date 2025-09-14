@@ -1,12 +1,21 @@
 import { useRef, useState, useEffect } from 'react';
 import { useTwilioRoom } from '../hooks/useTwilioRoom';
+import { useAudioLevel } from '../hooks/useAudioLevel';
 
 const Video = ({ roomId, userId }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
 
-  const { roomRef, dominantSpeaker, participants } = useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
+  const { roomRef, dominantSpeaker, participants, remoteTracks } = useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
+// const audioLevel = useAudioLevel(remoteTracks[0]);
+
+// useEffect(() => {
+//   if (audioLevel > 0) {
+//     console.log("🎚️ Audio level:", audioLevel);
+//   }
+// }, [audioLevel]);
+
 
   // Debug logging for dominant speaker changes
   useEffect(() => {

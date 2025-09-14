@@ -5,6 +5,7 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
   const roomRef = useRef(null);
   const [dominantSpeaker, setDominantSpeaker] = useState(null);
   const [participants, setParticipants] = useState(new Map());
+  const [remoteTracks, setRemoteTracks] = useState([]); // 👈 tambahan
 
   useEffect(() => {
     let isMounted = true;
@@ -38,41 +39,78 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
             el.style.height = '100%';
             el.style.objectFit = 'cover';
             localVideoRef.current.appendChild(el);
-            console.log('Local video element attached:', el);
           }
         });
 
-        // Attach local audio
+        // Local audio
         room.localParticipant.audioTracks.forEach(pub => {
-          const track = pub.track;
-          if (track) {
-            console.log('Local audio track attached:', track.id);
+          if (pub.track) {
+            console.log('Local audio track attached:', pub.track.id);
           }
         });
 
         const attachRemote = (track) => {
+          console.log("📡 Remote track subscribed:", track.kind, track.sid);
+
+          setRemoteTracks(prev => {
+            // jangan double insert kalau sudah ada
+            if (prev.find(t => t.sid === track.sid)) return prev;
+            return [...prev, track];
+          });
+
           if (track.kind === 'video' && remoteVideoRef.current) {
-            // Clear previous video elements
             const existingVideos = remoteVideoRef.current.querySelectorAll('video');
             existingVideos.forEach(video => video.remove());
-            
             const el = track.attach();
             el.id = `remote-video-${track.sid}`;
             el.style.width = '100%';
             el.style.height = '100%';
             el.style.objectFit = 'cover';
             remoteVideoRef.current.appendChild(el);
-            console.log('Remote video element attached:', el);
           } else if (track.kind === 'audio') {
-            // Audio tracks are automatically played when attached
+            // tetap attach biar bisa kedengaran
             const el = track.attach();
             el.id = `remote-audio-${track.sid}`;
-            document.body.appendChild(el); // Audio elements can be hidden
-            console.log('Remote audio element attached:', el);
+            el.style.display = "none"; // biar tidak kelihatan
+            document.body.appendChild(el);
+
+            // Ambil MediaStream langsung dari track
+            const mediaStream = new MediaStream([track.mediaStreamTrack]);
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(mediaStream);
+            const analyser = audioCtx.createAnalyser();
+
+            source.connect(analyser);
+            analyser.fftSize = 256;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            let lastLog = Date.now();
+
+            const updateLevel = () => {
+              analyser.getByteFrequencyData(dataArray);
+              const avg =
+                dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+
+              if (Date.now() - lastLog > 500) {
+                console.log("🎚️ Remote audio level:", avg);
+                lastLog = Date.now();
+              }
+
+              requestAnimationFrame(updateLevel);
+            };
+
+            updateLevel();
           }
         };
 
+
         const detachRemote = (track) => {
+          console.log("❌ Remote track unsubscribed:", track.kind, track.sid);
+
+          setRemoteTracks(prev => prev.filter(t => t.sid !== track.sid));
+
           if (track.kind === 'video') {
             const el = document.getElementById(`remote-video-${track.sid}`);
             if (el) el.remove();
@@ -95,11 +133,8 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
 
         // New participants
         room.on('participantConnected', p => {
-          console.log('Participant connected:', p.identity);
           p.on('trackSubscribed', attachRemote);
           p.on('trackUnsubscribed', detachRemote);
-          
-          // Update participants map
           setParticipants(prev => {
             const updated = new Map(prev);
             updated.set(p.sid, {
@@ -112,11 +147,9 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
         });
 
         room.on('participantDisconnected', p => {
-          console.log('Participant disconnected:', p.identity);
           p.tracks.forEach(pub => {
             if (pub.track) detachRemote(pub.track);
           });
-          // Remove from participants map
           setParticipants(prev => {
             const updated = new Map(prev);
             updated.delete(p.sid);
@@ -124,24 +157,19 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
           });
         });
 
-        // Handle dominant speaker changes
+        // Dominant speaker
         room.on('dominantSpeakerChanged', participant => {
-          console.log('Dominant speaker changed:', participant ? participant.identity : 'none');
           setDominantSpeaker(participant);
         });
 
         // Track all participants
         const updateParticipants = () => {
           const participantMap = new Map();
-          
-          // Add local participant
           participantMap.set(room.localParticipant.sid, {
             participant: room.localParticipant,
             isLocal: true,
             identity: room.localParticipant.identity
           });
-          
-          // Add remote participants
           room.participants.forEach(p => {
             participantMap.set(p.sid, {
               participant: p,
@@ -149,7 +177,6 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
               identity: p.identity
             });
           });
-          
           setParticipants(participantMap);
         };
 
@@ -166,7 +193,6 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
       isMounted = false;
       const room = roomRef.current;
       if (room) {
-        console.log('Cleaning up room:', room.name);
         room.localParticipant.tracks.forEach(pub => {
           if (pub.track) {
             pub.track.stop();
@@ -178,5 +204,5 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
     };
   }, [roomId, userId, localVideoRef, remoteVideoRef]);
 
-  return { roomRef, dominantSpeaker, participants };
+  return { roomRef, dominantSpeaker, participants, remoteTracks };
 }
