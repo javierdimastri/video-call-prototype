@@ -7,7 +7,7 @@ const Video = ({ roomId, userId }) => {
   const remoteVideoRef = useRef(null);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
 
-  const { roomRef, dominantSpeaker, participants, remoteTracks } = useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
+  const { roomRef, dominantSpeaker, participants, remoteTracks, audioLevels, localAudioLevel } = useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef);
 // const audioLevel = useAudioLevel(remoteTracks[0]);
 
 // useEffect(() => {
@@ -72,6 +72,22 @@ const Video = ({ roomId, userId }) => {
   const isLocalDominant = dominantSpeaker && participants.get(dominantSpeaker.sid)?.isLocal;
   const dominantSpeakerName = dominantSpeaker ? dominantSpeaker.identity : null;
 
+  // Check audio levels for green frame (threshold > 10)
+  const isLocalAudioHigh = localAudioLevel > 40;
+  const getRemoteAudioHigh = () => {
+    // Get the highest audio level from remote tracks
+    const levels = Array.from(audioLevels.values());
+    return levels.some(level => level > 40);
+  };
+  const isRemoteAudioHigh = getRemoteAudioHigh();
+
+  // Debug audio levels
+  useEffect(() => {
+    if (localAudioLevel > 0) {
+      console.log('🎚️ Local audio level:', localAudioLevel, '(Green frame:', isLocalAudioHigh ? 'ON' : 'OFF' + ')');
+    }
+  }, [localAudioLevel, isLocalAudioHigh]);
+
   return (
 <div className="flex flex-col items-center space-y-4 p-2 w-full h-full">
   {/* Dominant Speaker Indicator */}
@@ -93,10 +109,12 @@ const Video = ({ roomId, userId }) => {
         ref={localVideoRef}
         className={`bg-black sm:w-1/3 aspect-video rounded overflow-hidden transition-all duration-300 ${
           isLocalDominant ? 'ring-4 ring-green-400 shadow-lg' : ''
+        } ${
+          isLocalAudioHigh ? 'ring-4 ring-green-500 shadow-green-500/50' : ''
         }`}
       />
       <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-        You {isLocalDominant ? '🎙️' : ''}
+        You {isLocalDominant ? '🎙️' : ''} {isLocalAudioHigh ? '🔊' : ''}
       </div>
     </div>
     <div className="relative">
@@ -104,10 +122,12 @@ const Video = ({ roomId, userId }) => {
         ref={remoteVideoRef}
         className={`bg-black w-full sm:w-2/3 aspect-video rounded overflow-hidden transition-all duration-300 ${
           dominantSpeaker && !isLocalDominant ? 'ring-4 ring-green-400 shadow-lg' : ''
+        } ${
+          isRemoteAudioHigh ? 'ring-4 ring-green-500 shadow-green-500/50' : ''
         }`}
       />
       <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-        Remote {dominantSpeaker && !isLocalDominant ? '🎙️' : ''}
+        Remote {dominantSpeaker && !isLocalDominant ? '🎙️' : ''} {isRemoteAudioHigh ? '🔊' : ''}
       </div>
     </div>
   </div>

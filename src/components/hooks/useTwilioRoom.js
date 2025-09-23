@@ -6,6 +6,8 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
   const [dominantSpeaker, setDominantSpeaker] = useState(null);
   const [participants, setParticipants] = useState(new Map());
   const [remoteTracks, setRemoteTracks] = useState([]); // 👈 tambahan
+  const [audioLevels, setAudioLevels] = useState(new Map()); // Track audio levels per participant
+  const [localAudioLevel, setLocalAudioLevel] = useState(0); // Local participant audio level
 
   useEffect(() => {
     let isMounted = true;
@@ -42,10 +44,32 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
           }
         });
 
-        // Local audio
+        // Local audio - setup audio level monitoring
         room.localParticipant.audioTracks.forEach(pub => {
           if (pub.track) {
             console.log('Local audio track attached:', pub.track.id);
+            
+            // Setup local audio level monitoring
+            const mediaStream = new MediaStream([pub.track.mediaStreamTrack]);
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(mediaStream);
+            const analyser = audioCtx.createAnalyser();
+
+            source.connect(analyser);
+            analyser.fftSize = 256;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const updateLocalLevel = () => {
+              if (!isMounted) return;
+              analyser.getByteFrequencyData(dataArray);
+              const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+              setLocalAudioLevel(avg);
+              requestAnimationFrame(updateLocalLevel);
+            };
+
+            updateLocalLevel();
           }
         });
 
@@ -89,12 +113,19 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
             let lastLog = Date.now();
 
             const updateLevel = () => {
+              if (!isMounted) return;
               analyser.getByteFrequencyData(dataArray);
-              const avg =
-                dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+              const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+
+              // Update audio level state for this track
+              setAudioLevels(prev => {
+                const updated = new Map(prev);
+                updated.set(track.sid, avg);
+                return updated;
+              });
 
               if (Date.now() - lastLog > 500) {
-                console.log("🎚️ Remote audio level:", avg);
+                console.log("🎚️ Remote audio level:", avg, "(Green frame:", avg > 10 ? "ON" : "OFF" + ")");
                 lastLog = Date.now();
               }
 
@@ -110,6 +141,15 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
           console.log("❌ Remote track unsubscribed:", track.kind, track.sid);
 
           setRemoteTracks(prev => prev.filter(t => t.sid !== track.sid));
+
+          // Clean up audio level tracking for removed tracks
+          if (track.kind === 'audio') {
+            setAudioLevels(prev => {
+              const updated = new Map(prev);
+              updated.delete(track.sid);
+              return updated;
+            });
+          }
 
           if (track.kind === 'video') {
             const el = document.getElementById(`remote-video-${track.sid}`);
@@ -204,5 +244,12 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
     };
   }, [roomId, userId, localVideoRef, remoteVideoRef]);
 
-  return { roomRef, dominantSpeaker, participants, remoteTracks };
+  return { 
+    roomRef, 
+    dominantSpeaker, 
+    participants, 
+    remoteTracks, 
+    audioLevels, 
+    localAudioLevel 
+  };
 }
