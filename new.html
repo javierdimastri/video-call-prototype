@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Socket.IO Room Test</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <h2>Socket.IO Room Test</h2>
+  <div>
+    <label>Room ID:</label>
+    <input id="roomId" value="room1">
+    <label>User ID:</label>
+    <input id="userId" value="user1">
+    <button id="connectBtn">Connect</button>
+  </div>
+
+  <hr>
+
+  <div id="status"></div>
+  <pre id="logs" style="background:#111;color:#0f0;padding:10px;height:200px;overflow:auto;"></pre>
+
+  <hr>
+
+  <div>
+    <input id="msg" placeholder="Enter message..." style="width:60%">
+    <button id="sendBtn">Send room:notify</button>
+  </div>
+
+  <script>
+    let socket;
+
+    const log = (msg) => {
+      const el = document.getElementById('logs');
+      el.textContent += msg + "\n";
+      el.scrollTop = el.scrollHeight;
+    };
+
+    document.getElementById('connectBtn').onclick = () => {
+      const roomId = document.getElementById('roomId').value;
+      const userId = document.getElementById('userId').value;
+
+      socket = io("http://localhost:4000", {
+        query: { roomId, userId }
+      });
+
+      socket.on("connect", () => {
+        document.getElementById('status').textContent = "✅ Connected as " + userId;
+        log("Connected: " + socket.id);
+      });
+
+      socket.on("disconnect", (reason) => {
+        document.getElementById('status').textContent = "❌ Disconnected: " + reason;
+        log("Disconnected: " + reason);
+      });
+
+      // listen for your server's broadcast event
+      socket.on("video-event", (data) => {
+        log("[video-event] " + JSON.stringify(data));
+      });
+    };
+
+    document.getElementById('sendBtn').onclick = () => {
+      const roomId = document.getElementById('roomId').value;
+      const msg = document.getElementById('msg').value;
+      const payload = { roomId, message: msg, type: "info" };
+      socket.emit("room:notify", payload);
+      log("Sent room:notify " + JSON.stringify(payload));
+    };
+  </script>
+</body>
+</html>
