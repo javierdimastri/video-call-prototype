@@ -158,7 +158,6 @@ export function useTwilioRoom(roomId, userId, localVideoRef, remoteVideoRef) {
       });
     };
 
-    attachFromParticipant(room.localParticipant);
     room.participants.forEach(attachFromParticipant);
   }, [remoteVideoRef]);
 
